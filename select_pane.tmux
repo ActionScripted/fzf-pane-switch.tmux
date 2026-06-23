@@ -28,16 +28,33 @@ get_tmux_option() {
     fi
 }
 
+shell_quote() {
+    local value="${1}"
+
+    printf "'"
+    while [[ "${value}" == *"'"* ]]; do
+        printf "%s'\\''" "${value%%\'*}"
+        value="${value#*\'}"
+    done
+    printf "%s'" "${value}"
+}
+
 set_switch_pane_bindings() {
     local bind_key preview_pane fzf_window_position fzf_preview_window_position list_panes_format
+    local run_shell_command
     bind_key="$(get_tmux_option "${tmux_bind_key}" "${default_bind_key}")"
     preview_pane="$(get_tmux_option "${tmux_preview_pane}" "${default_preview_pane}")"
     fzf_window_position="$(get_tmux_option "${tmux_fzf_window_position}" "${default_fzf_window_position}")"
     fzf_preview_window_position="$(get_tmux_option "${tmux_fzf_preview_window_position}" "${default_fzf_preview_window_position}")"
     list_panes_format="$(get_tmux_option "${tmux_list_panes_format}" "${default_tmux_list_panes_format}")"
 
-    tmux bind-key "${bind_key}" run-shell \
-        "'${CURRENT_DIR}/select_pane.sh' '${preview_pane}' '${fzf_window_position}' '${fzf_preview_window_position}' \"${list_panes_format}\""
+    run_shell_command="$(shell_quote "${CURRENT_DIR}/select_pane.sh")"
+    run_shell_command+=" $(shell_quote "${preview_pane}")"
+    run_shell_command+=" $(shell_quote "${fzf_window_position}")"
+    run_shell_command+=" $(shell_quote "${fzf_preview_window_position}")"
+    run_shell_command+=" $(shell_quote "${list_panes_format}")"
+
+    tmux bind-key "${bind_key}" run-shell "${run_shell_command}"
 }
 
 set_switch_pane_bindings

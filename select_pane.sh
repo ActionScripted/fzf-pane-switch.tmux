@@ -4,63 +4,92 @@
 # If you press ENTER, it switches to the selected pane.
 # If you press ENTER on an empty line, it creates a new window in the current session.
 function select_pane() {
-    local border_styling="" fzf_version_comparison
-    local current_pane pane pane_id preview
+    local fzf_version_comparison
+    local current_pane pane pane_id script_path
+    local -a border_styling=() preview=() fzf_args
 
     # Save the currently active pane ID
     current_pane=$(tmux display-message -p '#{pane_id}')
+    script_path="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/$(basename -- "${BASH_SOURCE[0]}")"
 
     # Setup border styling
     # Specific fzf releases have added additional styling options.
-    fzf_version=$(fzf --version | awk '{print $1}')
+    read -r fzf_version _ < <(fzf --version)
     # - 0.58.0 or later, we can enable border styling
     vercomp '0.58.0' "${fzf_version}"
     fzf_version_comparison=$?
     if [[ ${fzf_version_comparison} -ne 1 ]]; then
-        border_styling+=" --input-border --input-label=' Search ' --info=inline-right"
-        border_styling+=" --list-border --list-label=' Panes '"
-        border_styling+=" --preview-border --preview-label=' Preview '"
+        border_styling+=(--input-border --input-label=' Search ' --info=inline-right)
+        border_styling+=(--list-border --list-label=' Panes ')
+        border_styling+=(--preview-border --preview-label=' Preview ')
     fi
     # - 0.61.0 or later, we can enable ghost text
     vercomp '0.61.0' "${fzf_version}"
     fzf_version_comparison=$?
     if [[ ${fzf_version_comparison} -ne 1 ]]; then
-        border_styling+=" --ghost 'type to search...'"
+        border_styling+=(--ghost 'type to search...')
     fi
     # Fallback to old border styling used in tmux-fzf-pane-switch release v1.1.2 if $border_styling is not set
-    if [[ -z ${border_styling+x} ]]; then
-        border_styling="--preview-label='pane preview'"
+    if [[ ${#border_styling[@]} -eq 0 ]]; then
+        border_styling=(--preview-label='pane preview')
     fi
 
     # Check if we're using the fzf preview pane
     if [[ "${1}" = 'true' ]]; then
-        preview="--preview '"
-        preview+="tmux capture-pane -ep -S -\$(( \${FZF_PREVIEW_LINES:-30} )) -t {1} | "
-        # The awk below removes trailing empty/whitespace-only lines by finding the last non-empty line and printing up to that point
-        preview+="awk \"{a[NR]=\\\$0} END{for(i=NR;i>0;i--) if(a[i]~/[^ \\t]/){for(j=1;j<=i;j++) print a[j]; exit}}\" | "
-        preview+="tail -n \$(( \${FZF_PREVIEW_LINES:-30} ))"
-        preview+="' --preview-window=${3}"
+        preview=(--preview "\"${script_path}\" __render_preview__ {1}" --preview-window="${3}")
     fi
 
+    fzf_args=(--exit-0 --print-query --reverse --tmux "${2}" --with-nth=2..)
+    fzf_args+=("${border_styling[@]}")
+    fzf_args+=("${preview[@]}")
+
     # Launch switcher
-    pane=$(tmux list-panes -aF "${4}" | 
-        eval fzf --exit-0 --print-query --reverse --tmux "${2}" --with-nth=2.. "${border_styling}" "${preview}" | 
+    pane=$(tmux list-panes -aF "${4}" |
+        fzf "${fzf_args[@]}" |
         tail -1)
 
     # Set pane_id to first part of fzf output
-    pane_id=$(echo "${pane}" | awk '{print $1}')
+    pane_id="${pane%% *}"
 
     # If pane_id is empty, exit without changing pane
     if [[ -z "${pane_id}" ]]; then
         tmux switch-client -t "${current_pane}"
     # Check if pane exists
-    elif tmux has-session -t "${pane_id}" >/dev/null 2>&1; then
+    elif tmux display-message -p -t "${pane_id}" '#{pane_id}' >/dev/null 2>&1; then
         # Found it! Let's switch.
         tmux switch-client -t "${pane_id}"
     else
         # Pane not found, let's create it.
         tmux command-prompt -b -p "Press ENTER to create a new window in the current session [${pane}]" "new-window -n \"${pane}\""
     fi
+}
+
+function build_list_panes_format() {
+    local list_panes_format="${1}"
+    local -a format_parts
+
+    if [[ "${list_panes_format}" == *'#{'* ]]; then
+        printf '%s' "${list_panes_format}"
+        return
+    fi
+
+    read -r -a format_parts <<< "${list_panes_format}"
+    printf '#{%s} ' "${format_parts[@]}"
+}
+
+function render_preview() {
+    local pane_id="${1}"
+    local preview_lines
+
+    preview_lines="${FZF_PREVIEW_LINES:-30}"
+    if ! [[ "${preview_lines}" =~ ^[1-9][0-9]*$ ]]; then
+        preview_lines=30
+    fi
+
+    tmux capture-pane -ep -S "-${preview_lines}" -t "${pane_id}" |
+        # The awk below removes trailing empty/whitespace-only lines by finding the last non-empty line and printing up to that point
+        awk '{a[NR]=$0} END{for(i=NR;i>0;i--) if(a[i]~/[^ \t]/){for(j=1;j<=i;j++) print a[j]; exit}}' |
+        tail -n "${preview_lines}"
 }
 
 function vercomp() {
@@ -92,6 +121,11 @@ function vercomp() {
 command -v tmux >/dev/null 2>&1 || { echo "tmux not found"; exit 1; }
 command -v fzf >/dev/null 2>&1 || { echo "fzf not found"; exit 1; }
 
+if [[ "${1}" == '__render_preview__' ]]; then
+    render_preview "${2}"
+    exit $?
+fi
+
 # Pane preview
 preview_pane="${1}"
 # FZF window position
@@ -99,7 +133,6 @@ fzf_window_position="${2}"
 # FZF previe window position
 fzf_preview_window_position="${3}"
 # TMUX list-panes format
-read -r -a list_panes_format_overrides <<< "${4}"
-list_panes_formatted_overrides=$(printf '#{%s} ' "${list_panes_format_overrides[@]}")
+list_panes_formatted_overrides="$(build_list_panes_format "${4}")"
 
 select_pane "${preview_pane}" "${fzf_window_position}" "${fzf_preview_window_position}" "#{pane_id} ${list_panes_formatted_overrides}"
