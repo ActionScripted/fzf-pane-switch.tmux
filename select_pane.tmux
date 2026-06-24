@@ -15,7 +15,8 @@ tmux_bind_key="@fzf_pane_switch_bind-key"
 tmux_preview_pane="@fzf_pane_switch_preview-pane"
 tmux_fzf_window_position="@fzf_pane_switch_window-position"
 tmux_fzf_preview_window_position="@fzf_pane_switch_preview-pane-position"
-tmux_list_panes_format="@fzf_pane_switch_list-panes-format"
+# tmux_list_panes_format="@fzf_pane_switch_list-panes-format"
+tmux_list_panes_format='pane_id > session_name > window_name > pane_title > pane_current_command'
 
 get_tmux_option() {
     local option="${1}"
