@@ -7,7 +7,7 @@ default_bind_key='s'
 default_preview_pane='true'
 default_fzf_window_position='center,70%,80%'
 default_fzf_preview_window_position='right,,,nowrap'
-default_tmux_list_panes_format='pane_id  session_name  window_name  pane_title  pane_current_command'
+default_tmux_list_panes_format='#{session_name}  #{window_index}:#{window_name}  #{pane_current_command}'
 
 # User overridable options
 tmux_bind_key="@fzf_pane_switch_bind-key"
