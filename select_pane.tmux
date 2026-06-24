@@ -3,7 +3,7 @@
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default values
-default_bind_key='s'
+default_bind_key='f'
 default_preview_pane='true'
 default_fzf_window_position='center,70%,80%'
 default_fzf_preview_window_position='right,,,nowrap'
