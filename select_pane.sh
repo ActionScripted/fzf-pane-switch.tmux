@@ -67,6 +67,7 @@ function select_pane() {
 function build_list_panes_format() {
     local list_panes_format="${1}"
     local -a format_parts
+    local part result=''
 
     if [[ "${list_panes_format}" == *'#{'* ]]; then
         printf '%s' "${list_panes_format}"
@@ -74,7 +75,14 @@ function build_list_panes_format() {
     fi
 
     read -r -a format_parts <<< "${list_panes_format}"
-    printf '#{%s} ' "${format_parts[@]}"
+    for part in "${format_parts[@]}"; do
+        if [[ "${part}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+            result+="#{${part}} "
+        else
+            result+="${part} "
+        fi
+    done
+    printf '%s' "${result}"
 }
 
 function render_preview() {
