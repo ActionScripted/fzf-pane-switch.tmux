@@ -54,6 +54,11 @@ set_switch_pane_bindings() {
     run_shell_command+=" $(shell_quote "${fzf_preview_window_position}")"
     run_shell_command+=" $(shell_quote "${list_panes_format}")"
 
+    # Escape '#' so tmux does not expand #{...} format variables in the run-shell
+    # argument — they must reach select_pane.sh literally so list-panes -aF can
+    # expand them per-pane at runtime.
+    run_shell_command="${run_shell_command//'#'/##}"
+
     tmux bind-key "${bind_key}" run-shell "${run_shell_command}"
 }
 
